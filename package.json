@@ -1,0 +1,24 @@
+{
+  "name": "photobooth",
+  "version": "2.1.0",
+  "private": true,
+  "description": "A synchronized online photobooth for long-distance couples.",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node --watch server.js",
+    "check": "node --check server.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "socket.io": "^4.8.3"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/kerwinarlan/photobooth.git"
+  },
+  "license": "ISC",
+  "type": "commonjs"
+}

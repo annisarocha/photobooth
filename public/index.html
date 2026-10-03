@@ -1,0 +1,1647 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <meta name="theme-color" content="#0b0b0e" />
+  <title>Photobooth · Live LDR Photobooth</title>
+  <script src="/socket.io/socket.io.js"></script>
+<style>
+    :root {
+      color-scheme: dark;
+      --bg: #0a0806;
+      --panel: #14110c;
+      --panel-2: #1c1812;
+      --text: #f3ecdd;
+      --muted: #b6ad9a;
+      --subtle: #8d8472;
+      --amber: #e8a33d;
+      --amber-hi: #f6bd6a;
+      --paper: #f5eedd;
+      --ink: #14100a;
+      --live: #e0524a;
+      --ok: #8fbf6f;
+      --border: rgba(245,238,221,.09);
+      --border-strong: rgba(245,238,221,.17);
+      --serif: Georgia, "Iowan Old Style", "Palatino Linotype", "Book Antiqua", "Times New Roman", serif;
+      --mono: ui-monospace, "SF Mono", "Cascadia Mono", Menlo, Consolas, monospace;
+      --sans: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      --shadow: 0 24px 80px rgba(0,0,0,.52);
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html { background: var(--bg); }
+    body {
+      min-height: 100vh;
+      min-height: 100dvh;
+      padding: max(14px, env(safe-area-inset-top)) max(14px, env(safe-area-inset-right)) max(18px, env(safe-area-inset-bottom)) max(14px, env(safe-area-inset-left));
+      display: grid;
+      place-items: center;
+      overflow-x: hidden;
+      background:
+        radial-gradient(1100px 460px at 50% -8%, rgba(232,163,61,.09), transparent 62%),
+        radial-gradient(1400px 900px at 50% 120%, rgba(122,62,28,.1), transparent 62%),
+        #0a0806;
+      color: var(--text);
+      font-family: var(--sans);
+    }
+
+    button, input { font: inherit; }
+    button { -webkit-tap-highlight-color: transparent; }
+    :focus-visible { outline: 2px solid rgba(232,163,61,.75); outline-offset: 2px; }
+    input:focus-visible { outline-offset: 0; }
+    .icon { width: 18px; height: 18px; flex: 0 0 auto; }
+
+    #app {
+      position: relative;
+      overflow: hidden;
+      width: min(1080px, 100%);
+      border: 1px solid rgba(245,238,221,.12);
+      border-radius: 34px;
+      padding: 22px;
+      background:
+        radial-gradient(900px 380px at 50% -10%, rgba(232,163,61,.05), transparent 60%),
+        linear-gradient(180deg, rgba(28,24,17,.94), rgba(20,17,12,.96) 40%);
+      box-shadow: var(--shadow), inset 0 1px 0 rgba(255,250,235,.05);
+    }
+    /* marquee bulb row: the booth sign */
+    #app::before {
+      content: "";
+      position: absolute;
+      top: 0; left: 0; right: 0;
+      height: 40px;
+      pointer-events: none;
+      z-index: 4;
+      border-radius: 34px 34px 0 0;
+      background:
+        radial-gradient(circle at 50% 0, rgba(232,163,61,.22), transparent 72%) 0 0 / 100% 40px no-repeat,
+        radial-gradient(circle at 11px 9px, rgba(232,163,61,.85) 0 2.5px, rgba(232,163,61,.2) 3.5px, transparent 4.5px) 15px 0 / 66px 24px repeat-x,
+        radial-gradient(circle at 11px 9px, rgba(255,250,235,.92) 0 2px, rgba(255,250,235,.28) 3.5px, transparent 4.5px) 0 0 / 22px 24px repeat-x,
+        linear-gradient(180deg, #1b160e, #131009);
+      border-bottom: 1px solid var(--border);
+    }
+    /* inner shadow so the booth feels enclosed */
+    #app::after {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      z-index: 3;
+      border-radius: inherit;
+      box-shadow: inset 0 0 90px rgba(0,0,0,.5);
+    }
+
+    .app-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 14px;
+      margin-bottom: 18px;
+      padding-top: 50px;
+    }
+
+    .brand { display: flex; align-items: center; gap: 11px; min-width: 0; }
+    .brand-mark {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      border-radius: 14px;
+      border: 1px solid var(--border-strong);
+      background: linear-gradient(160deg, #241e13, #16120b);
+      color: var(--amber-hi);
+      box-shadow: inset 0 0 0 1px rgba(255,250,235,.04), 0 6px 18px rgba(0,0,0,.35);
+    }
+    .brand-mark .icon { width: 21px; height: 21px; }
+    .brand h1 {
+      font-family: var(--serif);
+      font-size: clamp(19px, 3vw, 24px);
+      font-weight: 700;
+      letter-spacing: -.01em;
+      color: var(--paper);
+      text-shadow: 0 2px 18px rgba(232,163,61,.16);
+    }
+    .brand small { display: block; color: var(--muted); font-size: 11px; margin-top: 2px; }
+
+    .room-badge {
+      flex: 0 0 auto;
+      max-width: 46%;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      padding: 8px 12px;
+      border: 1px solid var(--border);
+      border-radius: 999px;
+      background: rgba(245,238,221,.045);
+      color: var(--muted);
+      font-size: 12px;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+    #roomDisplay { font-family: var(--mono); font-size: 12px; letter-spacing: .03em; }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--subtle); }
+    .dot.online { background: var(--ok); box-shadow: 0 0 14px rgba(143,191,111,.55); }
+
+    .view { display: none; animation: enter .32s ease both; }
+    .view.active { display: block; }
+    @keyframes enter { from { opacity: 0; transform: translateY(12px) scale(.995); } }
+
+    #joinView { padding: clamp(30px, 8vw, 72px) 0 38px; text-align: center; }
+    .hero-icon {
+      width: clamp(150px, 30vw, 188px);
+      margin: 0 auto;
+      color: var(--amber-hi);
+      filter: drop-shadow(0 18px 40px rgba(0,0,0,.42));
+    }
+    .hero-icon svg { width: 100%; height: auto; display: block; }
+    .kicker {
+      margin-top: 20px;
+      font-family: var(--mono);
+      font-size: 12px;
+      letter-spacing: .24em;
+      text-transform: uppercase;
+      color: var(--amber);
+    }
+    #joinView h2 {
+      margin-top: 12px;
+      font-family: var(--serif);
+      font-size: clamp(32px, 6vw, 50px);
+      font-weight: 700;
+      letter-spacing: -.02em;
+      color: var(--paper);
+    }
+    #joinView > p { max-width: 560px; margin: 12px auto 28px; color: var(--muted); line-height: 1.6; }
+
+    .join-form { width: min(430px, 100%); margin: 0 auto; display: grid; gap: 12px; }
+    .input-wrap { text-align: left; }
+    .input-wrap label { display: block; margin: 0 0 7px 4px; color: var(--muted); font-size: 12px; }
+    input {
+      width: 100%;
+      min-height: 54px;
+      padding: 0 17px;
+      border: 1px solid var(--border-strong);
+      border-radius: 16px;
+      outline: none;
+      color: var(--text);
+      background: rgba(245,238,221,.05);
+      transition: border-color .2s, box-shadow .2s, background .2s;
+    }
+    input:focus { border-color: rgba(232,163,61,.5); box-shadow: 0 0 0 4px rgba(232,163,61,.1); background: rgba(245,238,221,.07); }
+    input::placeholder { color: var(--subtle); }
+
+    .btn {
+      min-height: 46px;
+      padding: 11px 16px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      border: 1px solid var(--border-strong);
+      border-radius: 14px;
+      color: var(--text);
+      background: rgba(245,238,221,.06);
+      cursor: pointer;
+      transition: transform .14s, background .2s, opacity .2s, border-color .2s;
+    }
+    .btn:hover { background: rgba(245,238,221,.11); }
+    .btn:active { transform: scale(.97); }
+    .btn:disabled { opacity: .45; cursor: not-allowed; transform: none; }
+    .btn-primary {
+      border: 0;
+      color: var(--ink);
+      font-weight: 800;
+      background: linear-gradient(165deg, #fbf5e6, #e5d9bc);
+      box-shadow: 0 14px 34px rgba(0,0,0,.35), inset 0 1px 0 rgba(255,255,255,.55);
+    }
+    .btn-primary:hover { background: linear-gradient(165deg, #fffdf3, #efe2c4); }
+    #joinBtn::after { content: "→"; margin-left: 2px; font-weight: 700; }
+    .btn-danger { color: #ff948c; background: rgba(224,82,74,.09); border-color: rgba(224,82,74,.24); }
+    .help { margin-top: 17px; color: var(--subtle); font-size: 12px; line-height: 1.55; }
+
+    .video-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(320px, 100%), 1fr));
+      gap: 14px;
+      margin-bottom: 16px;
+    }
+    .video-box {
+      position: relative;
+      min-height: 260px;
+      aspect-ratio: 4 / 3;
+      overflow: hidden;
+      border: 1px solid var(--border-strong);
+      border-radius: 20px;
+      background: #070605;
+      isolation: isolate;
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,.65), inset 0 0 70px rgba(0,0,0,.62), 0 16px 34px rgba(0,0,0,.45);
+      transition: box-shadow .35s, border-color .35s;
+    }
+    /* live booth screens: warm frame, soft edge */
+    .video-box.live, #localVideoBox {
+      border-color: rgba(232,163,61,.5);
+      box-shadow: inset 0 0 0 1px rgba(0,0,0,.6), inset 0 0 70px rgba(0,0,0,.55), 0 0 26px -8px rgba(232,163,61,.38), 0 16px 34px rgba(0,0,0,.45);
+    }
+    .video-box.live::before, #localVideoBox::before {
+      content: "LIVE";
+      position: absolute;
+      top: 10px; left: 12px;
+      z-index: 3;
+      padding: 3px 8px;
+      border-radius: 6px;
+      background: rgba(224,82,74,.92);
+      color: #fff6f0;
+      font-size: 10px;
+      font-weight: 800;
+      letter-spacing: .14em;
+      pointer-events: none;
+      animation: liveBlink 2.2s ease-in-out infinite;
+    }
+    @keyframes liveBlink { 0%, 100% { opacity: 1; } 50% { opacity: .55; } }
+    .video-box video { width: 100%; height: 100%; display: block; object-fit: cover; background: #080705; }
+    .video-box video.mirrored { transform: scaleX(-1); }
+    .preview-fallback { position: absolute; inset: 0; z-index: 1; width: 100%; height: 100%; object-fit: cover; background: #080705; }
+    .video-box::after { content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none; box-shadow: inset 0 -110px 80px -80px rgba(0,0,0,.88); }
+
+    .video-meta { position: absolute; z-index: 3; left: 11px; right: 11px; bottom: 10px; display: flex; align-items: center; justify-content: space-between; gap: 8px; pointer-events: none; }
+    .video-label, .connection-pill { padding: 6px 10px; border-radius: 999px; color: #f3ecdd; font-size: 12px; background: rgba(10,8,5,.6); border: 1px solid rgba(245,238,221,.1); backdrop-filter: blur(8px); }
+    .connection-pill { color: #cfc5ac; font-size: 11px; }
+    .connection-pill.connected { color: #bfe3a6; }
+    .connection-pill.failed { color: #ffaaa4; }
+
+    .waiting-tile { display: grid; place-items: center; text-align: center; padding: 28px; background: radial-gradient(circle at 50% 26%, rgba(232,163,61,.09), transparent 55%), #120f0a; }
+    .waiting-tile[hidden] { display: none; }
+    .waiting-icon { color: var(--amber-hi); filter: drop-shadow(0 10px 24px rgba(232,163,61,.25)); }
+    .waiting-icon svg { width: 52px; height: 52px; }
+    .waiting-tile strong { display: block; margin-top: 12px; font-family: var(--serif); font-size: 19px; color: var(--paper); }
+    .waiting-tile p { max-width: 260px; margin-top: 6px; color: var(--muted); font-size: 13px; line-height: 1.5; }
+
+    .countdown-overlay { position: absolute; inset: 0; z-index: 5; display: grid; place-items: center; opacity: 0; pointer-events: none; font-family: var(--serif); font-weight: 700; font-size: clamp(96px, 22vw, 180px); color: var(--paper); text-shadow: 0 8px 44px rgba(0,0,0,.8); background: rgba(10,8,5,.22); transition: opacity .1s; }
+    .countdown-overlay.show { opacity: 1; }
+    .countdown-overlay::after { content: ""; position: absolute; inset: 24%; border: 6px solid rgba(245,238,221,.9); border-radius: 50%; opacity: 0; transform: scale(.5); box-shadow: 0 0 80px rgba(232,163,61,.3); }
+    .countdown-overlay.show::after { animation: countdownRing 1s ease-out forwards; }
+    @keyframes countdownRing { 0% { opacity: 1; transform: scale(.5); } 100% { opacity: 0; transform: scale(1.06); } }
+    .flash { position: absolute; inset: 0; z-index: 8; pointer-events: none; opacity: 0; background: #fffdf6; }
+    .flash.go { animation: flash .25s ease-out; }
+    @keyframes flash { 0% { opacity: .94; } 100% { opacity: 0; } }
+
+    .capture-row { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 14px; margin: 16px 0; }
+    .capture-row .left { justify-self: start; }
+    .capture-row .right { justify-self: end; }
+    .shutter {
+      width: 92px;
+      height: 92px;
+      display: grid;
+      place-items: center;
+      position: relative;
+      border: 2px solid var(--border-strong);
+      border-radius: 50%;
+      background: radial-gradient(circle at 50% 38%, #2a2318, #15110a 72%);
+      box-shadow: 0 0 0 6px rgba(245,238,221,.04), 0 14px 40px rgba(0,0,0,.5), inset 0 2px 0 rgba(255,250,235,.08), inset 0 -10px 26px rgba(0,0,0,.55);
+      cursor: pointer;
+      transition: transform .15s, box-shadow .2s;
+    }
+    .shutter::before {
+      content: "";
+      width: 64px;
+      height: 64px;
+      border-radius: 50%;
+      background: radial-gradient(circle at 50% 32%, #f8b76b, #e8a33d 55%, #c97f28);
+      box-shadow: 0 0 30px rgba(232,163,61,.42), inset 0 2px 0 rgba(255,255,255,.35), inset 0 -6px 14px rgba(120,60,10,.35);
+    }
+    .shutter .icon {
+      position: absolute;
+      z-index: 1;
+      width: 27px;
+      height: 27px;
+      color: #241505;
+    }
+    .shutter:active { transform: scale(.93); }
+    .shutter:disabled { opacity: .42; cursor: not-allowed; }
+
+    .action-row { display: flex; justify-content: center; flex-wrap: wrap; gap: 9px; }
+    .section-head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-top: 18px; }
+    .section-head h3 { font-size: 14px; color: #d8d0bc; }
+    #photoCount { font-family: var(--mono); font-size: 11px; letter-spacing: .04em; color: var(--subtle); }
+
+    .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(92px, 1fr)); gap: 9px; margin-top: 9px; }
+    .photo-card { min-width: 0; padding: 7px; border: 1px solid rgba(245,238,221,.07); border-radius: 14px; background: rgba(245,238,221,.03); }
+    .photo-card.self { border-color: rgba(232,163,61,.24); background: rgba(232,163,61,.05); }
+    .photo-thumb { aspect-ratio: 4 / 3; overflow: hidden; border-radius: 9px; background: #131009; }
+    .photo-thumb img { width: 100%; height: 100%; display: block; object-fit: cover; }
+    .photo-placeholder { height: 100%; display: grid; place-items: center; color: var(--subtle); }
+    .photo-placeholder .icon { width: 30px; height: 30px; }
+    .photo-name { margin-top: 5px; overflow: hidden; color: var(--muted); font-size: 11px; white-space: nowrap; text-overflow: ellipsis; text-align: center; }
+
+    .status-bar { margin-top: 14px; padding: 10px 12px; display: flex; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; border: 1px solid var(--border); border-radius: 15px; background: rgba(245,238,221,.03); color: var(--muted); font-size: 12px; }
+    .users { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; }
+    .user-badge { padding: 4px 9px; border-radius: 999px; background: rgba(245,238,221,.06); }
+    .user-badge.self { color: var(--amber-hi); }
+
+    .template-selector { display: grid; grid-template-columns: repeat(auto-fit, minmax(110px, 1fr)); gap: 9px; margin: 12px 0; }
+    .template-option { padding: 12px 8px; border: 1px solid var(--border); border-radius: 14px; background: rgba(245,238,221,.03); color: var(--muted); cursor: pointer; transition: border-color .2s, background .2s, transform .12s; }
+    .template-option:hover { border-color: rgba(232,163,61,.32); }
+    .template-option.active { color: var(--amber-hi); border-color: rgba(232,163,61,.5); background: rgba(232,163,61,.08); }
+    .template-option strong { display: block; margin-bottom: 3px; font-size: 13px; color: inherit; }
+    .template-option small { display: block; font-family: var(--mono); font-size: 10.5px; letter-spacing: .02em; color: var(--subtle); }
+
+    .canvas-wrap { display: grid; place-items: center; min-height: 360px; margin: 14px 0; padding: 16px; border-radius: 20px; background: linear-gradient(180deg, #0d0b07, #13100a); border: 1px solid var(--border); box-shadow: inset 0 1px 0 rgba(255,250,235,.05), inset 0 -30px 70px rgba(0,0,0,.65); animation: develop .5s ease both; }
+    @keyframes develop { from { opacity: 0; transform: scale(.99); filter: sepia(.5) brightness(1.25); } }
+    #finalCanvas { display: block; max-width: 100%; max-height: min(72vh, 840px); border-radius: 10px; box-shadow: 0 24px 54px rgba(0,0,0,.62), 0 2px 0 rgba(255,255,255,.07); background: #15130e; }
+    .final-head { display: flex; align-items: end; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+    .final-head h2 { font-family: var(--serif); font-size: 26px; font-weight: 700; color: var(--paper); }
+    .final-head p { color: var(--muted); font-size: 12px; }
+
+    .toast { position: fixed; left: 50%; bottom: max(20px, env(safe-area-inset-bottom)); z-index: 50; transform: translate(-50%, 18px); opacity: 0; pointer-events: none; max-width: min(90vw, 520px); padding: 11px 15px; border-radius: 999px; background: rgba(28,22,14,.97); border: 1px solid var(--border-strong); box-shadow: 0 12px 40px rgba(0,0,0,.42); color: var(--text); font-size: 13px; transition: opacity .2s, transform .2s; }
+    .toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+    @media (max-width: 640px) {
+      #app { padding: 15px; border-radius: 26px; }
+      #app::before { border-radius: 26px 26px 0 0; }
+      .brand small { display: none; }
+      .room-badge { max-width: 44%; }
+      .video-box { min-height: 0; border-radius: 18px; }
+      .capture-row { grid-template-columns: auto 1fr auto; }
+      .shutter { width: 72px; height: 72px; }
+      .shutter::before { width: 50px; height: 50px; }
+      .capture-row .btn { width: 46px; padding-inline: 0; }
+      .capture-row .btn .wide-label { display: none; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .view, .canvas-wrap { animation: none; }
+      .video-box.live::before, #localVideoBox::before, .countdown-overlay::after { animation: none; }
+    }
+  </style>
+</head>
+<body>
+  <main id="app">
+    <header class="app-header">
+      <div class="brand">
+        <div class="brand-mark"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div>
+        <div><h1>Photobooth</h1><small>Live photobooth for people apart</small></div>
+      </div>
+      <div class="room-badge"><span id="socketDot" class="dot"></span><span id="roomDisplay">Not connected</span></div>
+    </header>
+
+    <section id="joinView" class="view active">
+      <div class="hero-icon"><svg viewBox="0 0 120 76" fill="none" aria-hidden="true"><rect x="4" y="10" width="52" height="56" rx="8" stroke="currentColor" stroke-width="2.5"/><rect x="64" y="10" width="52" height="56" rx="8" stroke="currentColor" stroke-width="2.5"/><circle cx="30" cy="32" r="10" fill="currentColor" opacity=".92"/><path d="M18 56c0-8.4 5.4-13 12-13s12 4.6 12 13" fill="currentColor" opacity=".92"/><circle cx="90" cy="32" r="10" stroke="currentColor" stroke-width="2.5"/><path d="M78 56c0-8.4 5.4-13 12-13s12 4.6 12 13" stroke="currentColor" stroke-width="2.5"/><path d="M60 22v10M55 27h10" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" opacity=".65"/></svg></div>
+      <p class="kicker">Private room · two people</p>
+      <h2>Same photo, different places.</h2>
+      <p>Create a private room, send the link to your person, and take synchronized photobooth shots while seeing each other live.</p>
+      <div class="join-form">
+        <div class="input-wrap">
+          <label for="roomInput">Private room</label>
+          <input id="roomInput" maxlength="40" autocomplete="off" placeholder="e.g. viron-and-alex" />
+        </div>
+        <div class="input-wrap">
+          <label for="nameInput">Your display name</label>
+          <input id="nameInput" maxlength="30" autocomplete="name" placeholder="Your name" />
+        </div>
+        <button id="joinBtn" class="btn btn-primary">Join the booth</button>
+      </div>
+      <p id="joinHint" class="help">Camera access requires HTTPS, except on localhost. Rooms are limited to two people in this version.</p>
+    </section>
+
+    <section id="cameraView" class="view">
+      <div id="videoGrid" class="video-grid">
+        <article id="localVideoBox" class="video-box">
+          <video id="localVideo" autoplay playsinline muted></video>
+          <div class="video-meta">
+            <span id="localLabel" class="video-label">You</span>
+            <span class="connection-pill connected">local</span>
+          </div>
+          <div class="countdown-overlay"></div>
+          <div class="flash"></div>
+        </article>
+        <article id="waitingTile" class="video-box waiting-tile">
+          <div><div class="waiting-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg></div><strong>Waiting for your person</strong><p>Copy the room link and keep this tab open. Their live preview will appear here.</p></div>
+        </article>
+      </div>
+
+      <div class="capture-row">
+        <button id="leaveBtn" class="btn left" aria-label="Leave room"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg><span class="wide-label">Leave</span></button>
+        <button id="captureBtn" class="shutter" aria-label="Start synchronized capture"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></button>
+        <button id="finalBtn" class="btn right" aria-label="Open photostrip"><span class="wide-label">Strip</span><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="2" y="2" width="20" height="20" rx="2.18" ry="2.18"/><line x1="7" y1="2" x2="7" y2="22"/><line x1="17" y1="2" x2="17" y2="22"/><line x1="2" y1="12" x2="22" y2="12"/><line x1="2" y1="7" x2="7" y2="7"/><line x1="2" y1="17" x2="7" y2="17"/><line x1="17" y1="17" x2="22" y2="17"/><line x1="17" y1="7" x2="22" y2="7"/></svg></button>
+      </div>
+
+      <div class="action-row">
+        <button id="copyLinkBtn" class="btn"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg><span>Copy room link</span></button>
+        <button id="switchCameraBtn" class="btn"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 4v6h-6"/><path d="M1 20v-6h6"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg><span>Flip camera</span></button>
+        <button id="screenFlashBtn" class="btn"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg><span id="flashLabel">Screen flash</span></button>
+        <button id="retryBtn" class="btn"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg><span>Reconnect video</span></button>
+        <button id="clearBtn" class="btn btn-danger"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/><line x1="10" y1="11" x2="10" y2="17"/><line x1="14" y1="11" x2="14" y2="17"/></svg><span>Clear my shots</span></button>
+      </div>
+
+      <div class="section-head"><h3>Recent shots</h3><span id="photoCount">0 / 6 each</span></div>
+      <div id="photoGrid" class="photo-grid"></div>
+
+      <div class="status-bar">
+        <span id="statusText">Preparing camera…</span>
+        <div id="roomUsers" class="users"></div>
+      </div>
+    </section>
+
+    <section id="finalView" class="view">
+      <div class="final-head"><div><h2>Your shared photostrip</h2><p>Shots are paired by synchronized capture.</p></div><button id="backToCameraBtn" class="btn">← Camera</button></div>
+      <div id="templateSelector" class="template-selector">
+        <button class="template-option active" data-template="filmStrip"><strong>Film strip</strong><small>classic booth · 4 frames</small></button>
+        <button class="template-option" data-template="filmStrip6"><strong>Film strip 6</strong><small>long strip · 6 frames</small></button>
+        <button class="template-option" data-template="instax"><strong>Instax</strong><small>instant print</small></button>
+        <button class="template-option" data-template="coupleStrip"><strong>Couple strip</strong><small>paired moments</small></button>
+        <button class="template-option" data-template="grid2x2"><strong>2 × 2</strong><small>classic grid</small></button>
+        <button class="template-option" data-template="grid3x2"><strong>3 × 2</strong><small>six frames</small></button>
+        <button class="template-option" data-template="polaroid"><strong>Polaroid</strong><small>dramatic print</small></button>
+      </div>
+      <div class="canvas-wrap"><canvas id="finalCanvas" width="900" height="1200"></canvas></div>
+      <div class="action-row">
+        <button id="downloadBtn" class="btn btn-primary"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg><span>Download PNG</span></button>
+        <button id="refreshBtn" class="btn"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg><span>Refresh</span></button>
+        <button id="finalCopyLinkBtn" class="btn"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg><span>Copy room link</span></button>
+      </div>
+      <div class="status-bar"><span id="finalStatus">Add at least one shot to build a strip.</span><span id="photoBreakdown"></span></div>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <script>
+    "use strict";
+
+    const MAX_PHOTOS = 6;
+    const CAPTURE_DELAY_MS = 3000;
+    const $ = (id) => document.getElementById(id);
+
+    const els = {
+      joinView: $("joinView"), cameraView: $("cameraView"), finalView: $("finalView"),
+      roomInput: $("roomInput"), nameInput: $("nameInput"), joinBtn: $("joinBtn"), joinHint: $("joinHint"),
+      roomDisplay: $("roomDisplay"), socketDot: $("socketDot"),
+      videoGrid: $("videoGrid"), localVideo: $("localVideo"), localVideoBox: $("localVideoBox"), localLabel: $("localLabel"), waitingTile: $("waitingTile"),
+      captureBtn: $("captureBtn"), leaveBtn: $("leaveBtn"), finalBtn: $("finalBtn"),
+      copyLinkBtn: $("copyLinkBtn"), switchCameraBtn: $("switchCameraBtn"), screenFlashBtn: $("screenFlashBtn"), retryBtn: $("retryBtn"), clearBtn: $("clearBtn"),
+      photoGrid: $("photoGrid"), photoCount: $("photoCount"), roomUsers: $("roomUsers"), statusText: $("statusText"),
+      backToCameraBtn: $("backToCameraBtn"), templateSelector: $("templateSelector"), finalCanvas: $("finalCanvas"), downloadBtn: $("downloadBtn"), refreshBtn: $("refreshBtn"), finalCopyLinkBtn: $("finalCopyLinkBtn"), finalStatus: $("finalStatus"), photoBreakdown: $("photoBreakdown"),
+      toast: $("toast")
+    };
+
+    const state = {
+      room: "",
+      name: "",
+      userId: "",
+      socket: null,
+      stream: null,
+      facingMode: "user",
+      screenFlash: true,
+      participants: new Map(),
+      peers: new Map(),
+      remoteTiles: new Map(),
+      myPhotos: [],
+      currentTemplate: "filmStrip",
+      clockOffsetMs: 0,
+      countdownFrame: 0,
+      activeCaptureId: null,
+      completedCaptureIds: new Set(),
+      renderingToken: 0,
+      joining: false,
+      iceServers: [{ urls: "stun:stun.l.google.com:19302" }, { urls: "stun:stun1.l.google.com:19302" }]
+    };
+
+    function showView(id) {
+      document.querySelectorAll(".view").forEach((view) => view.classList.remove("active"));
+      $(id).classList.add("active");
+    }
+
+    let toastTimer = 0;
+    function toast(message) {
+      els.toast.textContent = message;
+      els.toast.classList.add("show");
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => els.toast.classList.remove("show"), 2200);
+    }
+
+    function setStatus(message) { els.statusText.textContent = message; }
+    function normalizeRoom(value) { return value.trim().toLowerCase().replace(/[^a-z0-9_-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 40); }
+    function normalizeName(value) { return value.trim().replace(/\s+/g, " ").slice(0, 30); }
+    function getDeviceId() {
+      let id = localStorage.getItem("photobooth-device");
+      if (!id) { id = crypto.randomUUID(); localStorage.setItem("photobooth-device", id); }
+      return id;
+    }
+    function roomUrl() { const url = new URL(window.location.href); url.searchParams.set("room", state.room); return url.toString(); }
+
+    async function copyRoomLink() {
+      const url = roomUrl();
+      try { await navigator.clipboard.writeText(url); toast("Room link copied"); }
+      catch { window.prompt("Copy this room link:", url); }
+    }
+
+    async function loadIceConfig() {
+      try {
+        const response = await fetch("/ice-config", { cache: "no-store" });
+        if (!response.ok) throw new Error("ICE config unavailable");
+        const data = await response.json();
+        if (Array.isArray(data.iceServers) && data.iceServers.length) state.iceServers = data.iceServers;
+      } catch (error) {
+        console.warn("Using STUN-only fallback:", error);
+      }
+    }
+
+    async function acquireCamera(facingMode = "user") {
+      if (!navigator.mediaDevices?.getUserMedia) throw new Error("Camera access is not supported in this browser.");
+      return navigator.mediaDevices.getUserMedia({
+        video: { facingMode: { ideal: facingMode }, width: { ideal: 1280 }, height: { ideal: 960 }, frameRate: { ideal: 30, max: 30 } },
+        audio: false
+      });
+    }
+
+    async function startCamera(facingMode = state.facingMode) {
+      const previous = state.stream;
+      const next = await acquireCamera(facingMode);
+      state.stream = next;
+      state.facingMode = facingMode;
+      els.localVideo.srcObject = next;
+      els.localVideo.classList.toggle("mirrored", facingMode === "user");
+      await els.localVideo.play();
+
+      const nextTrack = next.getVideoTracks()[0];
+      const replacements = [];
+      for (const { pc } of state.peers.values()) {
+        const sender = pc.getSenders().find((item) => item.track?.kind === "video");
+        if (sender && nextTrack) replacements.push(sender.replaceTrack(nextTrack));
+      }
+      await Promise.allSettled(replacements);
+      previous?.getTracks().forEach((track) => track.stop());
+    }
+
+    function stopCamera() {
+      state.stream?.getTracks().forEach((track) => track.stop());
+      state.stream = null;
+      els.localVideo.srcObject = null;
+    }
+
+    function createRemoteTile(userId, name) {
+      if (state.remoteTiles.has(userId)) return state.remoteTiles.get(userId);
+      const box = document.createElement("article");
+      box.className = "video-box";
+      box.dataset.userId = userId;
+
+      const video = document.createElement("video");
+      video.autoplay = true;
+      video.playsInline = true;
+      video.muted = true;
+
+      const meta = document.createElement("div");
+      meta.className = "video-meta";
+      const label = document.createElement("span");
+      label.className = "video-label";
+      label.textContent = name || "Partner";
+      const connection = document.createElement("span");
+      connection.className = "connection-pill";
+      connection.textContent = "connecting";
+      meta.append(label, connection);
+
+      const countdown = document.createElement("div");
+      countdown.className = "countdown-overlay";
+      const flash = document.createElement("div");
+      flash.className = "flash";
+      const preview = document.createElement("img");
+      preview.className = "preview-fallback";
+      preview.alt = "";
+      preview.hidden = true;
+      box.append(preview, video, meta, countdown, flash);
+      els.videoGrid.appendChild(box);
+
+      const tile = { box, video, label, connection, countdown, flash, preview };
+      state.remoteTiles.set(userId, tile);
+      updateWaitingTile();
+      return tile;
+    }
+
+    function removeRemoteTile(userId) {
+      const tile = state.remoteTiles.get(userId);
+      if (!tile) return;
+      tile.video.srcObject = null;
+      tile.box.remove();
+      state.remoteTiles.delete(userId);
+      updateWaitingTile();
+    }
+
+    function updateWaitingTile() { els.waitingTile.hidden = state.participants.size > 0; }
+
+    function updateConnectionPill(userId, value) {
+      const tile = state.remoteTiles.get(userId);
+      if (!tile) return;
+      const normalized = value === "completed" ? "connected" : value;
+      tile.connection.textContent = normalized === "relay" ? "relay preview" : normalized;
+      const tone = normalized === "connected" || normalized === "relay" ? "connected" : normalized === "failed" || normalized === "disconnected" ? "failed" : "";
+      tile.connection.className = `connection-pill ${tone}`;
+      tile.box.classList.toggle("live", normalized === "connected" || normalized === "relay");
+    }
+
+    function ensurePeer(userId) {
+      const existing = state.peers.get(userId);
+      if (existing) return existing;
+
+      const pc = new RTCPeerConnection({ iceServers: state.iceServers });
+      const peer = { pc, pendingCandidates: [], makingOffer: false };
+      state.peers.set(userId, peer);
+      const participant = state.participants.get(userId);
+      createRemoteTile(userId, participant?.name || "Partner");
+
+      state.stream?.getTracks().forEach((track) => pc.addTrack(track, state.stream));
+
+      pc.ontrack = (event) => {
+        const tile = createRemoteTile(userId, state.participants.get(userId)?.name || "Partner");
+        let remoteStream = event.streams[0];
+        if (!remoteStream) {
+          remoteStream = tile.video.srcObject instanceof MediaStream ? tile.video.srcObject : new MediaStream();
+          remoteStream.addTrack(event.track);
+        }
+        tile.video.srcObject = remoteStream;
+        tile.video.play().catch(() => {});
+        tile.preview.hidden = true;
+      };
+
+      pc.onicecandidate = ({ candidate }) => {
+        if (candidate && state.socket?.connected) state.socket.emit("signal", { targetId: userId, signal: { type: "candidate", candidate } });
+      };
+
+      pc.onconnectionstatechange = () => {
+        updateConnectionPill(userId, pc.connectionState);
+        if (pc.connectionState === "failed") setStatus("Video connection failed. Tap reconnect.");
+        ensurePreviewFrameLoop();
+      };
+      pc.oniceconnectionstatechange = () => updateConnectionPill(userId, pc.iceConnectionState);
+
+      return peer;
+    }
+
+    function shouldInitiate(userId) { return Boolean(state.userId) && state.userId.localeCompare(userId) < 0; }
+
+    async function makeOffer(userId, iceRestart = false) {
+      const peer = ensurePeer(userId);
+      const { pc } = peer;
+      if (peer.makingOffer || pc.signalingState !== "stable") return;
+      try {
+        peer.makingOffer = true;
+        const offer = await pc.createOffer({ iceRestart });
+        await pc.setLocalDescription(offer);
+        state.socket.emit("signal", { targetId: userId, signal: { type: "offer", sdp: pc.localDescription } });
+      } catch (error) {
+        console.error("Offer failed", error);
+        updateConnectionPill(userId, "failed");
+      } finally {
+        peer.makingOffer = false;
+      }
+    }
+
+    async function flushCandidates(peer) {
+      if (!peer.pc.remoteDescription) return;
+      const queued = peer.pendingCandidates.splice(0);
+      for (const candidate of queued) {
+        try { await peer.pc.addIceCandidate(candidate); }
+        catch (error) { console.warn("Queued ICE candidate failed", error); }
+      }
+    }
+
+    async function handleSignal(from, signal) {
+      if (!state.participants.has(from)) {
+        state.participants.set(from, { name: "Partner", photos: [] });
+        createRemoteTile(from, "Partner");
+        renderAll();
+      }
+      const peer = ensurePeer(from);
+      const { pc } = peer;
+      try {
+        if (signal.type === "offer") {
+          if (pc.signalingState !== "stable") {
+            await pc.setLocalDescription({ type: "rollback" }).catch(() => {});
+          }
+          await pc.setRemoteDescription(signal.sdp);
+          await flushCandidates(peer);
+          const answer = await pc.createAnswer();
+          await pc.setLocalDescription(answer);
+          state.socket.emit("signal", { targetId: from, signal: { type: "answer", sdp: pc.localDescription } });
+        } else if (signal.type === "answer") {
+          await pc.setRemoteDescription(signal.sdp);
+          await flushCandidates(peer);
+        } else if (signal.type === "candidate" && signal.candidate) {
+          const candidate = new RTCIceCandidate(signal.candidate);
+          if (pc.remoteDescription) await pc.addIceCandidate(candidate);
+          else peer.pendingCandidates.push(candidate);
+        }
+      } catch (error) {
+        console.error("Signal handling failed", signal.type, error);
+        updateConnectionPill(from, "failed");
+      }
+    }
+
+    function closePeer(userId, removeTile = false) {
+      const peer = state.peers.get(userId);
+      if (peer) {
+        peer.pc.ontrack = null;
+        peer.pc.onicecandidate = null;
+        peer.pc.close();
+        state.peers.delete(userId);
+      }
+      if (removeTile) removeRemoteTile(userId);
+    }
+
+    function closeAllPeers(removeTiles = true) {
+      [...state.peers.keys()].forEach((id) => closePeer(id, removeTiles));
+    }
+
+    function connectToParticipant(userId) {
+      ensurePeer(userId);
+      if (shouldInitiate(userId)) makeOffer(userId);
+    }
+
+    function applyRoomState(users) {
+      const incomingIds = new Set();
+      for (const user of users || []) {
+        if (!user?.id || user.id === state.userId) continue;
+        incomingIds.add(user.id);
+        const participant = state.participants.get(user.id) || { name: user.name || "Partner", photos: [] };
+        participant.name = user.name || participant.name;
+        participant.photos = Array.isArray(user.photos) ? user.photos.map(normalizePhoto).filter(Boolean).slice(-MAX_PHOTOS) : participant.photos;
+        state.participants.set(user.id, participant);
+        createRemoteTile(user.id, participant.name).label.textContent = participant.name;
+      }
+
+      for (const id of [...state.participants.keys()]) {
+        if (!incomingIds.has(id)) {
+          state.participants.delete(id);
+          closePeer(id, true);
+        }
+      }
+      for (const id of incomingIds) {
+        connectToParticipant(id);
+        // Rejoin after a blip: if we are not the offer initiator, the partner must
+        // rebuild the peer, because its old connection to us just died.
+        if (state.userId && !shouldInitiate(id)) state.socket.emit("retry_peer", { targetId: id });
+      }
+      ensurePreviewFrameLoop();
+      renderAll();
+    }
+
+    function emitWithAck(event, payload, timeout = 7000) {
+      return new Promise((resolve, reject) => {
+        const timer = setTimeout(() => reject(new Error(`${event} timed out`)), timeout);
+        state.socket.emit(event, payload, (response) => {
+          clearTimeout(timer);
+          if (response?.ok === false) reject(new Error(response.error || "Request failed"));
+          else resolve(response || {});
+        });
+      });
+    }
+
+    async function syncClock(samples = 4) {
+      const collected = [];
+      for (let i = 0; i < samples; i += 1) {
+        const started = Date.now();
+        try {
+          const response = await emitWithAck("sync_clock", {}, 2500);
+          const ended = Date.now();
+          const midpoint = started + (ended - started) / 2;
+          collected.push({ rtt: ended - started, offset: Number(response.serverNow) - midpoint });
+        } catch {}
+      }
+      collected.sort((a, b) => a.rtt - b.rtt);
+      // Keep the last known offset when the sync fails mid-session: zeroing it
+      // would desync every later synchronized capture.
+      if (collected.length) state.clockOffsetMs = collected[0].offset;
+    }
+
+    async function joinSocketRoom() {
+      const response = await emitWithAck("join", { room: state.room, name: state.name, deviceId: getDeviceId() });
+      state.userId = response.selfId || state.socket.id;
+      applyRoomState(response.users || []);
+      await syncClock();
+      return response;
+    }
+
+    function connectSocket() {
+      return new Promise((resolve, reject) => {
+        state.socket = io({ reconnection: true, reconnectionAttempts: Infinity, transports: ["websocket", "polling"] });
+        let initialSettled = false;
+
+        state.socket.on("connect", async () => {
+          els.socketDot.classList.add("online");
+          try {
+            closeAllPeers(true);
+            state.participants.clear();
+            await joinSocketRoom();
+            setStatus(state.participants.size ? "Both cameras are in the room" : "Waiting for your person…");
+            if (!initialSettled) { initialSettled = true; resolve(); }
+          } catch (error) {
+            if (!initialSettled) { initialSettled = true; reject(error); }
+            else setStatus(error.message);
+          }
+        });
+
+        state.socket.on("disconnect", () => {
+          els.socketDot.classList.remove("online");
+          setStatus("Connection lost. Reconnecting…");
+          closeAllPeers(false);
+        });
+
+        state.socket.on("connect_error", (error) => {
+          console.error("Socket connection error", error);
+          if (!initialSettled) { initialSettled = true; reject(new Error("Could not reach the photobooth server.")); }
+        });
+
+        state.socket.on("user_joined", ({ userId, name }) => {
+          if (!userId || userId === state.userId) return;
+          state.participants.set(userId, { name: name || "Partner", photos: [] });
+          createRemoteTile(userId, name || "Partner");
+          connectToParticipant(userId);
+          ensurePreviewFrameLoop();
+          renderAll();
+          toast(`${name || "Your person"} joined`);
+        });
+
+        state.socket.on("user_left", ({ userId, name }) => {
+          state.participants.delete(userId);
+          closePeer(userId, true);
+          renderAll();
+          toast(`${name || "Your person"} left`);
+        });
+
+        state.socket.on("signal", ({ from, signal }) => handleSignal(from, signal));
+
+        state.socket.on("retry_peer", ({ from }) => {
+          closePeer(from, false);
+          connectToParticipant(from);
+        });
+
+        state.socket.on("countdown_start", ({ captureId, captureAt }) => startCountdown(captureId, Number(captureAt)));
+
+        state.socket.on("user_photo", ({ userId, name, photo }) => {
+          if (!userId || userId === state.userId) return;
+          const normalized = normalizePhoto(photo);
+          if (!normalized) return;
+          const participant = state.participants.get(userId) || { name: name || "Partner", photos: [] };
+          participant.name = name || participant.name;
+          participant.photos = [...participant.photos.filter((item) => item.id !== normalized.id), normalized].slice(-MAX_PHOTOS);
+          state.participants.set(userId, participant);
+          renderAll();
+          updateFinalStrip();
+        });
+
+        state.socket.on("user_cleared", ({ userId }) => {
+          const participant = state.participants.get(userId);
+          if (participant) participant.photos = [];
+          renderAll();
+          updateFinalStrip();
+        });
+
+        state.socket.on("preview_frame", ({ from, dataURL }) => {
+          if (!from || from === state.userId) return;
+          const tile = state.remoteTiles.get(from);
+          if (!tile) return;
+          tile.preview.src = dataURL;
+          tile.preview.hidden = false;
+          updateConnectionPill(from, "relay");
+        });
+      });
+    }
+
+    function normalizePhoto(photo) {
+      if (typeof photo === "string" && photo.startsWith("data:image/")) return { id: crypto.randomUUID(), dataURL: photo, takenAt: Date.now(), captureId: null };
+      if (!photo || typeof photo.dataURL !== "string" || !photo.dataURL.startsWith("data:image/")) return null;
+      return { id: String(photo.id || crypto.randomUUID()), dataURL: photo.dataURL, takenAt: Number(photo.takenAt) || Date.now(), captureId: photo.captureId ? String(photo.captureId) : null };
+    }
+
+    function drawVideoCover(ctx, video, width, height, mirror) {
+      const sourceW = video.videoWidth;
+      const sourceH = video.videoHeight;
+      if (!sourceW || !sourceH) throw new Error("Camera is not ready yet.");
+      const sourceRatio = sourceW / sourceH;
+      const targetRatio = width / height;
+      let sx = 0, sy = 0, sw = sourceW, sh = sourceH;
+      if (sourceRatio > targetRatio) { sw = sourceH * targetRatio; sx = (sourceW - sw) / 2; }
+      else { sh = sourceW / targetRatio; sy = (sourceH - sh) / 2; }
+      ctx.save();
+      if (mirror) { ctx.translate(width, 0); ctx.scale(-1, 1); }
+      ctx.drawImage(video, sx, sy, sw, sh, 0, 0, width, height);
+      ctx.restore();
+    }
+
+    async function captureLocalPhoto({ captureId = null, synced = false } = {}) {
+      if (state.myPhotos.length >= MAX_PHOTOS) { toast("You already have 6 shots"); return; }
+      if (els.localVideo.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) { toast("Camera is still warming up"); return; }
+
+      const canvas = document.createElement("canvas");
+      canvas.width = 960;
+      canvas.height = 720;
+      const ctx = canvas.getContext("2d", { alpha: false });
+      drawVideoCover(ctx, els.localVideo, canvas.width, canvas.height, state.facingMode === "user");
+      const dataURL = canvas.toDataURL("image/jpeg", 0.84);
+      const photo = { id: crypto.randomUUID(), dataURL, takenAt: Date.now() + state.clockOffsetMs, captureId };
+      state.myPhotos = [...state.myPhotos, photo].slice(-MAX_PHOTOS);
+      flashAllTiles();
+      renderAll();
+      updateFinalStrip();
+      state.socket?.emit("photo", { photo });
+      setStatus(synced ? "Synchronized shot captured" : "Photo captured");
+    }
+
+    function flashAllTiles() {
+      const flashes = [els.localVideoBox.querySelector(".flash"), ...[...state.remoteTiles.values()].map((tile) => tile.flash)];
+      for (const flash of flashes) {
+        flash.classList.remove("go");
+        void flash.offsetWidth;
+        flash.classList.add("go");
+      }
+      if (state.screenFlash) {
+        document.body.animate([{ filter: "brightness(1)" }, { filter: "brightness(2.1)" }, { filter: "brightness(1)" }], { duration: 260, easing: "ease-out" });
+      }
+    }
+
+    function setCountdownText(text, visible) {
+      const overlays = [els.localVideoBox.querySelector(".countdown-overlay"), ...[...state.remoteTiles.values()].map((tile) => tile.countdown)];
+      overlays.forEach((overlay) => { overlay.textContent = text; overlay.classList.toggle("show", visible); });
+    }
+
+    function startCountdown(captureId, captureAtServerTime) {
+      if (!captureId || state.completedCaptureIds.has(captureId)) return;
+      if (state.activeCaptureId && state.activeCaptureId !== captureId) return;
+      state.activeCaptureId = captureId;
+      els.captureBtn.disabled = true;
+      cancelAnimationFrame(state.countdownFrame);
+      // Fresh clock sample on both sides: the offset measured at join drifts on
+      // long sessions and would skew the shutter relative to the server time.
+      syncClock(2).catch(() => {});
+
+      const tick = () => {
+        const serverNowEstimate = Date.now() + state.clockOffsetMs;
+        const remaining = captureAtServerTime - serverNowEstimate;
+        if (remaining <= 0) {
+          setCountdownText("", false);
+          state.activeCaptureId = null;
+          state.completedCaptureIds.add(captureId);
+          if (state.completedCaptureIds.size > 30) state.completedCaptureIds.delete(state.completedCaptureIds.values().next().value);
+          captureLocalPhoto({ captureId, synced: true })
+            .catch(() => { setCountdownText("", false); toast("Capture failed. Try again."); })
+            .finally(() => { els.captureBtn.disabled = false; });
+          return;
+        }
+        setCountdownText(String(Math.max(1, Math.ceil(remaining / 1000))), true);
+        state.countdownFrame = requestAnimationFrame(tick);
+      };
+      tick();
+    }
+
+    function requestSyncedCapture() {
+      if (!state.socket?.connected) { toast("Not connected to the room"); return; }
+      if (state.myPhotos.length >= MAX_PHOTOS) { toast("Clear a shot before taking another"); return; }
+      state.socket.emit("start_countdown", { delayMs: CAPTURE_DELAY_MS }, (response) => {
+        if (response?.ok === false) toast(response.error || "Could not start countdown");
+      });
+    }
+
+    // ponytail: server-relayed preview frames, WebRTC fallback for restrictive NATs.
+    // Sends only while a peer is not connected; stops itself once all peers connect.
+    const PREVIEW_FRAME_MS = 250;
+    let previewFrameTimer = 0;
+    let previewCanvas = null;
+
+    function peersNeedFallback() {
+      for (const peer of state.peers.values()) {
+        if (peer.pc.connectionState !== "connected") return true;
+      }
+      return false;
+    }
+
+    function ensurePreviewFrameLoop() {
+      if (previewFrameTimer || !state.participants.size || !state.stream) return;
+      previewFrameTimer = setInterval(sendPreviewFrame, PREVIEW_FRAME_MS);
+    }
+
+    function stopPreviewFrameLoop() {
+      clearInterval(previewFrameTimer);
+      previewFrameTimer = 0;
+    }
+
+    function sendPreviewFrame() {
+      if (!state.socket?.connected || !peersNeedFallback()) { stopPreviewFrameLoop(); return; }
+      if (els.localVideo.readyState < HTMLMediaElement.HAVE_CURRENT_DATA) return;
+      if (!previewCanvas) {
+        previewCanvas = document.createElement("canvas");
+        previewCanvas.width = 320;
+        previewCanvas.height = 240;
+      }
+      const ctx = previewCanvas.getContext("2d", { alpha: false });
+      try { drawVideoCover(ctx, els.localVideo, 320, 240, state.facingMode === "user"); } catch { return; }
+      state.socket.emit("preview_frame", { frame: { id: state.userId, dataURL: previewCanvas.toDataURL("image/jpeg", 0.55) } });
+    }
+
+    function retryConnections() {
+      if (!state.socket?.connected) return;
+      for (const userId of state.participants.keys()) {
+        state.socket.emit("retry_peer", { targetId: userId });
+        closePeer(userId, false);
+        connectToParticipant(userId);
+      }
+      setStatus("Reconnecting live video…");
+    }
+
+    function renderUsers() {
+      els.roomUsers.replaceChildren();
+      const self = document.createElement("span");
+      self.className = "user-badge self";
+      self.textContent = `${state.name} · you`;
+      els.roomUsers.appendChild(self);
+      for (const participant of state.participants.values()) {
+        const badge = document.createElement("span");
+        badge.className = "user-badge";
+        badge.textContent = participant.name;
+        els.roomUsers.appendChild(badge);
+      }
+    }
+
+    function createPhotoCard(photo, name, isSelf, index) {
+      const card = document.createElement("article");
+      card.className = `photo-card${isSelf ? " self" : ""}`;
+      const thumb = document.createElement("div");
+      thumb.className = "photo-thumb";
+      const img = document.createElement("img");
+      img.src = photo.dataURL;
+      img.alt = `${name} shot ${index + 1}`;
+      img.loading = "lazy";
+      thumb.appendChild(img);
+      const caption = document.createElement("div");
+      caption.className = "photo-name";
+      caption.textContent = `${name} · ${index + 1}`;
+      card.append(thumb, caption);
+      return card;
+    }
+
+    function renderPhotos() {
+      els.photoGrid.replaceChildren();
+      let count = 0;
+      state.myPhotos.forEach((photo, index) => { els.photoGrid.appendChild(createPhotoCard(photo, state.name, true, index)); count += 1; });
+      for (const participant of state.participants.values()) {
+        participant.photos.forEach((photo, index) => { els.photoGrid.appendChild(createPhotoCard(photo, participant.name, false, index)); count += 1; });
+      }
+      if (!count) {
+        const card = document.createElement("article");
+        card.className = "photo-card";
+        card.innerHTML = '<div class="photo-thumb"><div class="photo-placeholder"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg></div></div><div class="photo-name">Your shots appear here</div>';
+        els.photoGrid.appendChild(card);
+      }
+      const remoteCount = [...state.participants.values()].reduce((sum, participant) => sum + participant.photos.length, 0);
+      els.photoCount.textContent = `${state.myPhotos.length} yours · ${remoteCount} theirs · ${MAX_PHOTOS} max each`;
+    }
+
+    function renderAll() {
+      els.localLabel.textContent = `${state.name || "You"} · you`;
+      els.roomDisplay.textContent = state.room ? `#${state.room}` : "Not connected";
+      renderUsers();
+      renderPhotos();
+      updateWaitingTile();
+      updatePhotoBreakdown();
+    }
+
+    function allUserGroups() {
+      return [
+        { id: state.userId || "self", name: state.name || "You", photos: state.myPhotos },
+        ...[...state.participants.entries()].map(([id, participant]) => ({ id, name: participant.name, photos: participant.photos }))
+      ];
+    }
+
+    function interleavedPhotos() {
+      const groups = allUserGroups();
+      const items = [];
+      for (let index = 0; index < MAX_PHOTOS; index += 1) {
+        groups.forEach((group) => { if (group.photos[index]) items.push({ ...group.photos[index], name: group.name, userId: group.id }); });
+      }
+      return items;
+    }
+
+    // Newest photos of each user, merged round-robin so every user appears
+    // even when photo counts differ (a plain tail slice would drop the minority user).
+    function balancedPhotos(total) {
+      const stacks = allUserGroups()
+        .filter((group) => group.photos.length > 0)
+        .map((group) => ({ userId: group.id, name: group.name, photos: [...group.photos].reverse() }));
+      const items = [];
+      let more = true;
+      while (items.length < total && more) {
+        more = false;
+        stacks.forEach((stack) => {
+          const photo = stack.photos.shift();
+          if (photo) {
+            items.push({ ...photo, name: stack.name, userId: stack.userId });
+            more = true;
+          }
+        });
+      }
+      return items;
+    }
+
+    function captureGroups() {
+      const groups = allUserGroups();
+      const byCapture = new Map();
+      groups.forEach((group) => {
+        group.photos.forEach((photo, index) => {
+          const key = photo.captureId || `manual-${index}`;
+          if (!byCapture.has(key)) byCapture.set(key, { key, takenAt: photo.takenAt, entries: new Map() });
+          const capture = byCapture.get(key);
+          capture.takenAt = Math.min(capture.takenAt || photo.takenAt, photo.takenAt);
+          capture.entries.set(group.id, { ...photo, name: group.name, userId: group.id });
+        });
+      });
+      return [...byCapture.values()].sort((a, b) => a.takenAt - b.takenAt);
+    }
+
+    function updatePhotoBreakdown() {
+      const parts = [`${state.name || "You"}: ${state.myPhotos.length}`];
+      state.participants.forEach((participant) => parts.push(`${participant.name}: ${participant.photos.length}`));
+      els.photoBreakdown.textContent = parts.join(" · ");
+    }
+
+    function roundedRect(ctx, x, y, w, h, radius) {
+      const r = Math.min(radius, w / 2, h / 2);
+      ctx.beginPath();
+      ctx.moveTo(x + r, y);
+      ctx.arcTo(x + w, y, x + w, y + h, r);
+      ctx.arcTo(x + w, y + h, x, y + h, r);
+      ctx.arcTo(x, y + h, x, y, r);
+      ctx.arcTo(x, y, x + w, y, r);
+      ctx.closePath();
+    }
+
+    function loadImage(url) {
+      return new Promise((resolve) => {
+        const image = new Image();
+        image.onload = () => resolve(image);
+        image.onerror = () => resolve(null);
+        image.src = url;
+      });
+    }
+
+    function coverCrop(image, w, h) {
+      const sourceRatio = image.width / image.height;
+      const targetRatio = w / h;
+      if (sourceRatio > targetRatio) {
+        const sw = image.height * targetRatio;
+        return { sx: (image.width - sw) / 2, sy: 0, sw, sh: image.height };
+      }
+      const sh = image.width / targetRatio;
+      return { sx: 0, sy: (image.height - sh) / 2, sw: image.width, sh };
+    }
+
+    function drawImageCover(ctx, image, x, y, w, h, radius = 12) {
+      const { sx, sy, sw, sh } = coverCrop(image, w, h);
+      ctx.save();
+      roundedRect(ctx, x, y, w, h, radius);
+      ctx.clip();
+      ctx.drawImage(image, sx, sy, sw, sh, x, y, w, h);
+      ctx.restore();
+    }
+
+    const FILM_GRADES = {
+      fuji: "saturate(1.12) contrast(1.07) brightness(1.04)",
+      instax: "saturate(1.3) contrast(1.12) sepia(.05)",
+      dslr: "contrast(1.1) saturate(1.03)"
+    };
+
+    // draw a photo with a film-stock color grade, plus subtle grain and vignette
+    function drawGraded(ctx, image, x, y, w, h, radius = 12, grade = "") {
+      if (grade) ctx.filter = grade;
+      drawImageCover(ctx, image, x, y, w, h, radius);
+      if (grade) ctx.filter = "none";
+      applyGrainRect(ctx, x, y, w, h, .04, 200);
+      applyVignetteRect(ctx, x, y, w, h, .2);
+    }
+
+    function applyGrainRect(ctx, x, y, w, h, alpha = .05, count = 500) {
+      for (let i = 0; i < count; i += 1) {
+        const g = 150 + Math.random() * 105;
+        ctx.fillStyle = `rgba(${g},${g},${g},${alpha})`;
+        ctx.fillRect(x + Math.random() * w, y + Math.random() * h, 1.5, 1.5);
+      }
+    }
+
+    function applyVignetteRect(ctx, x, y, w, h, strength = .35) {
+      const g = ctx.createRadialGradient(x + w / 2, y + h / 2, Math.min(w, h) * .34, x + w / 2, y + h / 2, Math.max(w, h) * .72);
+      g.addColorStop(0, "rgba(0,0,0,0)");
+      g.addColorStop(1, `rgba(0,0,0,${strength})`);
+      ctx.fillStyle = g;
+      ctx.fillRect(x, y, w, h);
+    }
+
+    const STRIP_CANVAS_SIZES = {
+      filmStrip: [900, 2290],
+      filmStrip6: [900, 3340],
+      instax: [900, 1200],
+      coupleStrip: [900, 1200],
+      grid2x2: [900, 1200],
+      grid3x2: [900, 1200],
+      polaroid: [900, 1200]
+    };
+
+    function setCanvasForTemplate(template) {
+      const [w, h] = STRIP_CANVAS_SIZES[template] || [900, 1200];
+      if (els.finalCanvas.width !== w || els.finalCanvas.height !== h) {
+        els.finalCanvas.width = w;
+        els.finalCanvas.height = h;
+      }
+    }
+
+    function drawStripPaper(ctx, W, H) {
+      ctx.fillStyle = "#f3efe6";
+      ctx.fillRect(0, 0, W, H);
+      applyGrainRect(ctx, 0, 0, W, H, .04, 520);
+    }
+
+    function drawSprockets(ctx, W, H) {
+      ctx.fillStyle = "#1d1d24";
+      for (let y = 96; y < H - 52; y += 44) {
+        roundedRect(ctx, 28, y, 18, 12, 6); ctx.fill();
+        roundedRect(ctx, W - 46, y, 18, 12, 6); ctx.fill();
+      }
+    }
+
+    function drawStripFooter(ctx, W, H, date) {
+      ctx.fillStyle = "#23232b";
+      ctx.font = "800 31px system-ui";
+      ctx.textAlign = "center";
+      ctx.fillText("PHOTOBOOTH", W / 2, H - 74);
+      ctx.fillStyle = "#6d6d76";
+      ctx.font = "600 15px system-ui";
+      ctx.fillText(`${date} · #${state.room}`, W / 2, H - 48);
+    }
+
+    function drawPlaceholder(ctx, x, y, w, h, label = "Waiting for a shot") {
+      ctx.save();
+      roundedRect(ctx, x, y, w, h, 14);
+      ctx.fillStyle = "#222229";
+      ctx.fill();
+      ctx.fillStyle = "#70707b";
+      ctx.font = "600 18px system-ui";
+      ctx.textAlign = "center";
+      ctx.fillText(label, x + w / 2, y + h / 2);
+      ctx.restore();
+    }
+
+    async function updateFinalStrip() {
+      const token = ++state.renderingToken;
+      const canvas = els.finalCanvas;
+      const ctx = canvas.getContext("2d", { alpha: false });
+      setCanvasForTemplate(state.currentTemplate);
+      const W = canvas.width;
+      const H = canvas.height;
+      const innerW = W - 92;
+      const innerH = H - 170;
+
+      const flat = interleavedPhotos();
+      if (!flat.length) {
+        ctx.fillStyle = "#151519";
+        ctx.fillRect(0, 0, W, H);
+        ctx.fillStyle = "#74747f";
+        ctx.font = "700 26px system-ui";
+        ctx.textAlign = "center";
+        ctx.fillText("Take a photo to start your strip", W / 2, H / 2);
+        els.finalStatus.textContent = "Add at least one shot to build a strip.";
+        return;
+      }
+
+      const imageMap = new Map();
+      const allUnique = [...new Map(flat.map((item) => [item.id, item])).values()];
+      const loaded = await Promise.all(allUnique.map(async (item) => [item.id, await loadImage(item.dataURL)]));
+      if (token !== state.renderingToken) return;
+      loaded.forEach(([id, image]) => imageMap.set(id, image));
+
+      const date = new Date().toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
+
+      if (state.currentTemplate === "filmStrip" || state.currentTemplate === "filmStrip6") {
+        const count = state.currentTemplate === "filmStrip6" ? 6 : 4;
+        const items = balancedPhotos(count);
+        drawStripPaper(ctx, W, H);
+        drawSprockets(ctx, W, H);
+        const fx = 72, fw = W - 144, gap = 20, top = 84, bottom = 150;
+        const fh = (H - top - bottom - gap * (count - 1)) / count;
+        items.forEach((item, index) => {
+          const y = top + index * (fh + gap);
+          const image = item ? imageMap.get(item.id) : null;
+          if (image) drawGraded(ctx, image, fx, y, fw, fh, 2, FILM_GRADES.fuji);
+          else drawPlaceholder(ctx, fx, y, fw, fh, "");
+        });
+        ctx.fillStyle = "rgba(70,70,80,.5)";
+        ctx.font = "700 10px system-ui";
+        ctx.textAlign = "center";
+        ctx.fillText("35MM · PHOTOBOOTH 400", W / 2, H - 124);
+        drawStripFooter(ctx, W, H, date);
+      } else if (state.currentTemplate === "instax") {
+        const item = flat[flat.length - 1];
+        const image = item ? imageMap.get(item.id) : null;
+        // dark booth room behind the print
+        ctx.fillStyle = "#0c0c11";
+        ctx.fillRect(0, 0, W, H);
+        const spot = ctx.createRadialGradient(W / 2, H / 2 - 40, 60, W / 2, H / 2 - 40, 580);
+        spot.addColorStop(0, "rgba(255,214,10,.1)");
+        spot.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = spot;
+        ctx.fillRect(0, 0, W, H);
+        applyGrainRect(ctx, 0, 0, W, H, .06, 700);
+        applyVignetteRect(ctx, 0, 0, W, H, .5);
+        ctx.save();
+        ctx.translate(W / 2, H / 2 + 30);
+        ctx.rotate(-0.02);
+        // landscape instant card (Instax Mini proportions)
+        const cardW = innerW * .8, cardH = cardW * .62;
+        ctx.shadowColor = "rgba(0,0,0,.65)";
+        ctx.shadowBlur = 46;
+        ctx.shadowOffsetY = 14;
+        ctx.fillStyle = "#fafafa";
+        roundedRect(ctx, -cardW / 2, -cardH / 2, cardW, cardH, 8);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
+        ctx.strokeStyle = "rgba(0,0,0,.05)";
+        ctx.lineWidth = 1;
+        roundedRect(ctx, -cardW / 2 + 12, -cardH / 2 + 12, cardW - 24, cardH - 24, 6);
+        ctx.stroke();
+        const pw = cardW * .72, ph = pw * .742;
+        const px = -pw / 2, py = -cardH / 2 + 22;
+        if (image) {
+          const { sx, sy, sw, sh } = coverCrop(image, pw, ph);
+          ctx.save();
+          roundedRect(ctx, px, py, pw, ph, 2);
+          ctx.clip();
+          ctx.filter = FILM_GRADES.instax;
+          ctx.drawImage(image, sx, sy, sw, sh, px, py, pw, ph);
+          ctx.filter = "none";
+          applyVignetteRect(ctx, px, py, pw, ph, .3);
+          applyGrainRect(ctx, px, py, pw, ph, .05, 260);
+          ctx.restore();
+        } else {
+          ctx.fillStyle = "#2a2a31";
+          roundedRect(ctx, px, py, pw, ph, 2);
+          ctx.fill();
+        }
+        ctx.fillStyle = "#3a3a40";
+        ctx.font = "800 15px system-ui";
+        ctx.textAlign = "center";
+        ctx.fillText("PHOTOBOOTH", 0, cardH / 2 - 28);
+        ctx.fillStyle = "#b3242b";
+        ctx.font = "700 11px system-ui";
+        ctx.fillText(`★ ${date}`, 0, cardH / 2 - 10);
+        ctx.restore();
+      } else if (state.currentTemplate === "coupleStrip") {
+        const users = allUserGroups().slice(0, 2);
+        const captures = captureGroups().slice(-4);
+        const rows = Math.max(1, Math.min(4, captures.length));
+        drawStripPaper(ctx, W, H);
+        const pad = 72, top = 92, bottom = 132, gap = 18, colGap = 12;
+        const rowH = (H - top - bottom - gap * (rows - 1)) / rows;
+        const colW = (W - pad * 2 - colGap * (users.length - 1)) / users.length;
+        for (let row = 0; row < rows; row += 1) {
+          const capture = captures[row];
+          users.forEach((user, col) => {
+            const x = pad + col * (colW + colGap);
+            const y = top + row * (rowH + gap);
+            const entry = capture?.entries.get(user.id);
+            const image = entry ? imageMap.get(entry.id) : null;
+            if (image) drawGraded(ctx, image, x, y, colW, rowH, 4, FILM_GRADES.fuji);
+            else drawPlaceholder(ctx, x, y, colW, rowH, user.name);
+            ctx.fillStyle = "rgba(0,0,0,.62)";
+            roundedRect(ctx, x + 12, y + rowH - 40, Math.min(170, colW - 24), 28, 14); ctx.fill();
+            ctx.fillStyle = "white";
+            ctx.font = "700 13px system-ui";
+            ctx.textAlign = "left";
+            ctx.fillText(user.name, x + 24, y + rowH - 20);
+          });
+        }
+        drawStripFooter(ctx, W, H, date);
+      } else if (state.currentTemplate === "grid2x2" || state.currentTemplate === "grid3x2") {
+        const cols = state.currentTemplate === "grid2x2" ? 2 : 3;
+        const rows = 2;
+        const total = cols * rows;
+        const items = balancedPhotos(total);
+        drawStripPaper(ctx, W, H);
+        const pad = 54, top = 66, bottom = 128, gap = 16;
+        const cellW = (W - pad * 2 - gap * (cols - 1)) / cols;
+        const cellH = (H - top - bottom - gap * (rows - 1)) / rows;
+        for (let index = 0; index < total; index += 1) {
+          const x = pad + (index % cols) * (cellW + gap);
+          const y = top + Math.floor(index / cols) * (cellH + gap);
+          const item = items[index];
+          const image = item ? imageMap.get(item.id) : null;
+          if (image) drawGraded(ctx, image, x, y, cellW, cellH, 4, FILM_GRADES.dslr);
+          else drawPlaceholder(ctx, x, y, cellW, cellH, "");
+        }
+        drawStripFooter(ctx, W, H, date);
+      } else if (state.currentTemplate === "polaroid") {
+        const item = flat[flat.length - 1];
+        const image = item ? imageMap.get(item.id) : null;
+        // dark booth room behind the print
+        ctx.fillStyle = "#0c0c11";
+        ctx.fillRect(0, 0, W, H);
+        const spot = ctx.createRadialGradient(W / 2, H / 2 - 40, 60, W / 2, H / 2 - 40, 580);
+        spot.addColorStop(0, "rgba(255,214,10,.1)");
+        spot.addColorStop(1, "rgba(0,0,0,0)");
+        ctx.fillStyle = spot;
+        ctx.fillRect(0, 0, W, H);
+        applyGrainRect(ctx, 0, 0, W, H, .06, 700);
+        applyVignetteRect(ctx, 0, 0, W, H, .5);
+        ctx.save();
+        ctx.translate(W / 2, H / 2 + 30);
+        ctx.rotate(-0.03);
+        const cardW = innerW * .8, cardH = innerH * .86;
+        ctx.shadowColor = "rgba(0,0,0,.65)";
+        ctx.shadowBlur = 46;
+        ctx.shadowOffsetY = 14;
+        ctx.fillStyle = "#f4f1ea";
+        roundedRect(ctx, -cardW / 2, -cardH / 2, cardW, cardH, 5);
+        ctx.fill();
+        ctx.shadowBlur = 0;
+        ctx.shadowOffsetY = 0;
+        const px = -cardW / 2 + 26, py = -cardH / 2 + 26, pw = cardW - 52, ph = cardH - 210;
+        if (image) {
+          const { sx, sy, sw, sh } = coverCrop(image, pw, ph);
+          ctx.save();
+          roundedRect(ctx, px, py, pw, ph, 2);
+          ctx.clip();
+          ctx.drawImage(image, sx, sy, sw, sh, px, py, pw, ph);
+          // dramatic print effects: warm cast, vignette, grain, light leak
+          ctx.fillStyle = "rgba(255,170,80,.07)";
+          ctx.fillRect(px, py, pw, ph);
+          applyVignetteRect(ctx, px, py, pw, ph, .42);
+          applyGrainRect(ctx, px, py, pw, ph, .05, 320);
+          const leak = ctx.createRadialGradient(px + pw * .82, py - pw * .05, 8, px + pw * .82, py - pw * .05, pw * .85);
+          leak.addColorStop(0, "rgba(255,150,50,.34)");
+          leak.addColorStop(.45, "rgba(255,70,60,.1)");
+          leak.addColorStop(1, "rgba(0,0,0,0)");
+          ctx.fillStyle = leak;
+          ctx.fillRect(px, py, pw, ph);
+          ctx.restore();
+        } else {
+          ctx.fillStyle = "#2a2a31";
+          roundedRect(ctx, px, py, pw, ph, 2);
+          ctx.fill();
+        }
+        ctx.fillStyle = "#2b2b31";
+        ctx.font = "italic 600 25px Georgia, 'Times New Roman', serif";
+        ctx.textAlign = "center";
+        ctx.fillText(`${item?.name || "someone"} · together`, 0, cardH / 2 - 62);
+        ctx.fillStyle = "#b3242b";
+        ctx.font = "700 13px system-ui";
+        ctx.fillText(date, 0, cardH / 2 - 36);
+        ctx.fillStyle = "#8f8f96";
+        ctx.font = "800 14px system-ui";
+        ctx.fillText("PHOTOBOOTH", 0, cardH / 2 - 13);
+        ctx.restore();
+      } else {
+        const item = flat[flat.length - 1];
+        const image = item ? imageMap.get(item.id) : null;
+        drawStripPaper(ctx, W, H);
+        if (image) drawImageCover(ctx, image, 72, 92, W - 144, H - 250, 6);
+        else drawPlaceholder(ctx, 72, 92, W - 144, H - 250, "");
+        drawStripFooter(ctx, W, H, date);
+      }
+
+      els.finalStatus.textContent = `${flat.length} shared photo${flat.length === 1 ? "" : "s"} · ${state.currentTemplate}`;
+      updatePhotoBreakdown();
+    }
+
+    function describeCameraError(error) {
+      const name = error?.name || "";
+      const message = String(error?.message || "").toLowerCase();
+      if (!window.isSecureContext) return "Camera needs HTTPS. Open the https:// link (not http://), then allow camera access.";
+      if (name === "NotAllowedError" || message.includes("not allowed") || message.includes("permission")) {
+        return "Camera access was denied. Open this link directly in Safari or Chrome (not an in-app browser), tap Allow when asked, and check Settings > Safari > Camera.";
+      }
+      if (name === "NotFoundError" || message.includes("no camera")) return "No camera was found on this device.";
+      return error?.message || "Could not join the room.";
+    }
+
+    async function joinRoom() {
+      if (state.joining) return;
+      const room = normalizeRoom(els.roomInput.value) || `room-${crypto.randomUUID().slice(0, 8)}`;
+      const name = normalizeName(els.nameInput.value) || "Guest";
+      state.joining = true;
+      els.joinBtn.disabled = true;
+      els.joinBtn.textContent = "Opening camera…";
+      state.room = room;
+      state.name = name;
+      try {
+        await loadIceConfig();
+        await startCamera("user");
+        els.joinBtn.textContent = "Joining room…";
+        await connectSocket();
+        history.replaceState(null, "", roomUrl());
+        showView("cameraView");
+        renderAll();
+      } catch (error) {
+        console.error(error);
+        stopCamera();
+        state.socket?.disconnect();
+        state.socket = null;
+        els.joinHint.textContent = describeCameraError(error);
+        els.joinHint.style.color = "#ff8f88";
+      } finally {
+        state.joining = false;
+        els.joinBtn.disabled = false;
+        els.joinBtn.textContent = "Join the booth";
+      }
+    }
+
+    function leaveRoom() {
+      cancelAnimationFrame(state.countdownFrame);
+      setCountdownText("", false);
+      stopPreviewFrameLoop();
+      state.socket?.disconnect();
+      state.socket = null;
+      closeAllPeers(true);
+      state.participants.clear();
+      state.myPhotos = [];
+      state.completedCaptureIds.clear();
+      stopCamera();
+      els.socketDot.classList.remove("online");
+      els.roomDisplay.textContent = "Not connected";
+      showView("joinView");
+    }
+
+    els.joinBtn.addEventListener("click", joinRoom);
+    [els.roomInput, els.nameInput].forEach((input) => input.addEventListener("keydown", (event) => { if (event.key === "Enter") joinRoom(); }));
+    els.captureBtn.addEventListener("click", requestSyncedCapture);
+    els.copyLinkBtn.addEventListener("click", copyRoomLink);
+    els.finalCopyLinkBtn.addEventListener("click", copyRoomLink);
+    els.leaveBtn.addEventListener("click", leaveRoom);
+    els.finalBtn.addEventListener("click", () => { showView("finalView"); updateFinalStrip(); });
+    els.backToCameraBtn.addEventListener("click", () => showView("cameraView"));
+    els.retryBtn.addEventListener("click", retryConnections);
+
+    els.switchCameraBtn.addEventListener("click", async () => {
+      els.switchCameraBtn.disabled = true;
+      try {
+        const nextFacing = state.facingMode === "user" ? "environment" : "user";
+        await startCamera(nextFacing);
+        toast(nextFacing === "user" ? "Front camera" : "Back camera");
+      } catch (error) { toast(error.message || "Could not switch camera"); }
+      finally { els.switchCameraBtn.disabled = false; }
+    });
+
+    els.screenFlashBtn.addEventListener("click", () => {
+      state.screenFlash = !state.screenFlash;
+      document.getElementById("flashLabel").textContent = state.screenFlash ? "Flash off" : "Screen flash";
+      els.screenFlashBtn.style.borderColor = state.screenFlash ? "rgba(232,163,61,.45)" : "";
+    });
+
+    els.clearBtn.addEventListener("click", () => {
+      if (!state.myPhotos.length) return;
+      if (!window.confirm("Clear all of your photos from this room?")) return;
+      state.myPhotos = [];
+      state.socket?.emit("clear_photos");
+      renderAll();
+      updateFinalStrip();
+      toast("Your shots were cleared");
+    });
+
+    els.templateSelector.addEventListener("click", (event) => {
+      const button = event.target.closest(".template-option");
+      if (!button) return;
+      document.querySelectorAll(".template-option").forEach((item) => item.classList.remove("active"));
+      button.classList.add("active");
+      state.currentTemplate = button.dataset.template;
+      updateFinalStrip();
+    });
+
+    els.refreshBtn.addEventListener("click", updateFinalStrip);
+    els.downloadBtn.addEventListener("click", async () => {
+      await updateFinalStrip();
+      const link = document.createElement("a");
+      link.download = `photobooth-${state.room}-${Date.now()}.png`;
+      link.href = els.finalCanvas.toDataURL("image/png");
+      link.click();
+    });
+
+    document.addEventListener("keydown", (event) => {
+      if (event.code === "Space" && els.cameraView.classList.contains("active") && !["INPUT", "BUTTON"].includes(document.activeElement?.tagName)) {
+        event.preventDefault();
+        requestSyncedCapture();
+      }
+      if (event.key === "Escape") {
+        if (els.finalView.classList.contains("active")) showView("cameraView");
+      }
+    });
+
+    window.addEventListener("pagehide", () => {
+      state.socket?.disconnect();
+      stopCamera();
+      stopPreviewFrameLoop();
+      closeAllPeers(false);
+    });
+
+    (() => {
+      const params = new URLSearchParams(location.search);
+      els.roomInput.value = normalizeRoom(params.get("room") || "") || `couple-${crypto.randomUUID().slice(0, 8)}`;
+      els.nameInput.value = localStorage.getItem("photobooth-name") || "";
+      els.nameInput.addEventListener("change", () => localStorage.setItem("photobooth-name", normalizeName(els.nameInput.value)));
+      updateFinalStrip();
+    })();
+  </script>
+</body>
+</html>
