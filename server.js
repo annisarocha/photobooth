@@ -12,7 +12,7 @@ const MAX_PHOTOS = 6;
 const LEAVE_GRACE_MS = 8000;
 const MAX_PHOTO_DATA_LENGTH = 1_500_000;
 const MAX_PREVIEW_FRAME_LENGTH = 200_000;
-const INDEX_PATH = path.join(__dirname, "public", "index.html");
+const INDEX_PATH = path.join(__dirname, "index.html");
 
 const rooms = new Map();
 const memberships = new Map();
